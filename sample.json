@@ -1,0 +1,21 @@
+{
+    "Entities": {
+        "Enemies": [
+            {
+                "Name": "Goblin",
+                "Damage": 1,
+                "Health": 10
+            },
+            {
+                "Name": "Orc",
+                "Damage": 2,
+                "Health": 15
+            }
+        ],
+        "Player": {
+            "Name": "Hero",
+            "Damage": 10,
+            "Health": 100
+        }
+    }
+}
