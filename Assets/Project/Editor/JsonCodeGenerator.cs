@@ -18,7 +18,7 @@ public static class JsonCodeGenerator
         }
     }
     
-    public static void GenerateScriptableObjectClass(string outputPath, string rootClassName)
+    public static void GenerateScriptableRootClass(string outputPath, string rootClassName)
     {
         var classBuilder = new StringBuilder();
         classBuilder.AppendLine("using UnityEngine;");
@@ -31,8 +31,7 @@ public static class JsonCodeGenerator
         string filePath = Path.Combine(outputPath, $"{rootClassName}ScriptableObject.cs");
         File.WriteAllText(filePath, classBuilder.ToString());
     }
-
-
+    
     private static void GenerateClass(string className, JObject jObject, IDictionary<string, StringBuilder> classDefinitions)
     {
         var classBuilder = new StringBuilder();

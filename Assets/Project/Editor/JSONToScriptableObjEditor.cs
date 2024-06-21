@@ -1,10 +1,12 @@
-﻿using UnityEngine;
+﻿using System;
+using UnityEngine;
 using UnityEditor;
 using System.IO;
+using Project.Editor;
+using UnityEditor.Compilation;
 
 public class JSONToScriptableObjEditor : EditorWindow
 {
-    private string jsonFilePath = "Assets/Content/Sample/sample.json";
     private string outputPath = "Assets/Content/Sample";
     
     [MenuItem("Tools/Scriptable Object Maker")]
@@ -16,10 +18,6 @@ public class JSONToScriptableObjEditor : EditorWindow
     private void OnGUI()
     {
         GUILayout.Label("GameData Editor", EditorStyles.boldLabel);
-
-        TextAsset p = AssetDatabase.LoadAssetAtPath<TextAsset>(jsonFilePath);
-        TextAsset ph = AssetDatabase.LoadAssetAtPath<TextAsset>("Content/Sample/sample.json");
-
         // jsonFilePath = EditorGUILayout.TextField("JSON File Path", jsonFilePath);
         // outputPath = EditorGUILayout.TextField("Output Path", outputPath);
 
@@ -27,53 +25,44 @@ public class JSONToScriptableObjEditor : EditorWindow
         {
             GenerateCSharpClasses();
         }
-
-        // if (GUILayout.Button("Create ScriptableObject"))
-        // {
-        //     CreateScriptableObjectFromJson();
-        // }
     }
 
     private void GenerateCSharpClasses()
     {
+        if (TryPickFilePath(out var jsonFilePath)) return;
+
+        var json = File.ReadAllText(jsonFilePath);
+        JsonCodeGenerator.GenerateClasses(json, outputPath);
+        Debug.Log("C# classes generated successfully!");
+        JsonCodeGenerator.GenerateScriptableRootClass(outputPath, "Root");
+        
+        AssetDatabase.Refresh();
+        
+        // We must compile the just generated scripts, subscribe to the OnFinished event
+        _pendingFileCreation = true;
+    }
+
+    private bool _pendingFileCreation;
+
+    private void Update()
+    {
+        if (!EditorApplication.isCompiling && _pendingFileCreation)
+        {
+            _pendingFileCreation = false;
+            Debug.Log("Creating asset");
+            ScriptableObjectCreator.CreateAsset(outputPath, "RootScriptableObject");
+        }
+    }
+    
+    private static bool TryPickFilePath(out string jsonFilePath)
+    {
+        jsonFilePath = EditorUtility.OpenFilePanel("Select a file", Application.dataPath, "json");
         if (string.IsNullOrEmpty(jsonFilePath) || !File.Exists(jsonFilePath))
         {
             Debug.LogError("Invalid JSON file path");
-            return;
+            return true;
         }
 
-        string json = File.ReadAllText(jsonFilePath);
-        JsonCodeGenerator.GenerateClasses(json, outputPath);
-        JsonCodeGenerator.GenerateScriptableObjectClass(outputPath, "Root");
-
-        AssetDatabase.Refresh();
-        Debug.Log("C# classes generated successfully!");
+        return false;
     }
-
-    // private void CreateScriptableObjectFromJson()
-    // {
-    //     if (string.IsNullOrEmpty(jsonFilePath) || !File.Exists(jsonFilePath))
-    //     {
-    //         Debug.LogError("Invalid JSON file path");
-    //         return;
-    //     }
-    //
-    //     string json = File.ReadAllText(jsonFilePath);
-    //     var gameData = JsonCodeGenerator.LoadJson<RootScriptableObject>(jsonFilePath);
-    //     if (gameData != null)
-    //     {
-    //         string assetPath = "Assets/GameData.asset";
-    //         AssetDatabase.CreateAsset(gameData, assetPath);
-    //         AssetDatabase.SaveAssets();
-    //         AssetDatabase.Refresh();
-    //         EditorUtility.FocusProjectWindow();
-    //         Selection.activeObject = gameData;
-    //
-    //         Debug.Log("ScriptableObject created successfully!");
-    //     }
-    //     else
-    //     {
-    //         Debug.LogError("Failed to create ScriptableObject");
-    //     }
-    // }
 }
