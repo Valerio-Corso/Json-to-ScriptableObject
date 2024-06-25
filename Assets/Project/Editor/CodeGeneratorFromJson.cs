@@ -1,17 +1,30 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.CodeDom.Compiler;
 using Project.Editor;
 using Unity.Plastic.Newtonsoft.Json.Linq;
 
-public static class CodeGeneratorFromJson
+public class CodeGeneratorFromJson
 {
-    private static JsonCodegenObject _codegenObject;
-    
-    public static void GenerateJsonClasses(JsonCodegenObject codegenObj)
+    private readonly JsonCodegenObject _codegenObject;
+
+    public CodeGeneratorFromJson(JsonCodegenObject codegenObject)
     {
-        _codegenObject = codegenObj;
+        _codegenObject = codegenObject;
+    }
+    
+    public void GenerateFolderStructure()
+    {
+        var rootDirectory = Path.Combine(_codegenObject.OutputPath, "Generated");
+        var directory = Path.Combine(rootDirectory, _codegenObject.JsonName);
+        Directory.CreateDirectory(rootDirectory);
+        Directory.CreateDirectory(directory);
+        _codegenObject.OutputPath = directory;
+    }
+    
+    public void GenerateJsonClasses()
+    {
         var jObject = JObject.Parse(_codegenObject.Json);
         var classDefinitions = new Dictionary<string, StringBuilder>();
         _codegenObject.JsonRootClassName = $"{_codegenObject.JsonName}Root";
@@ -22,83 +35,89 @@ public static class CodeGeneratorFromJson
             var filePath = Path.Combine(_codegenObject.OutputPath, $"{_codegenObject.JsonName}{classDef.Key}.cs");
             File.WriteAllText(filePath, classDef.Value.ToString());
         }
-        
-        _codegenObject = null;
     }
     
-    public static void GenerateScriptableRootClass(JsonCodegenObject codegenObject, string outputPath)
+    public void GenerateScriptableRootClass()
     {
         var classBuilder = new StringBuilder();
-        classBuilder.AppendLine("using UnityEngine;");
-        classBuilder.AppendLine($"using JsonToCSharp.Generated.{codegenObject.JsonName};");
-        classBuilder.AppendLine("[CreateAssetMenu(fileName = \"GameData\", menuName = \"ScriptableObjects/GameData\", order = 1)]");
-        classBuilder.AppendLine($"public class {codegenObject.JsonName}ScriptableObject : ScriptableObject");
-        classBuilder.AppendLine("{");
-        classBuilder.AppendLine($"    public {codegenObject.JsonRootClassName} Data;");
-        classBuilder.AppendLine("}");
-        
-        var className = $"{codegenObject.JsonName}ScriptableObject";
-        var fileName = $"{className}.cs";
-        string filePath = Path.Combine(outputPath, fileName);
-        File.WriteAllText(filePath, classBuilder.ToString());
-        codegenObject.ScriptableObjectClassName = className;
-    }
-    
-    private static void GenerateClasses(string className, JObject jObject, IDictionary<string, StringBuilder> classDefinitions)
-    {
-        var classBuilder = new StringBuilder();
-        classBuilder.AppendLine("using System;");
-        classBuilder.AppendLine("using System.Collections.Generic;");
-        classBuilder.Append(Environment.NewLine);
-        classBuilder.Append($"namespace JsonToCSharp.Generated.{_codegenObject.JsonName}");
-        classBuilder.Append(GraphParenthesis(true));
-        classBuilder.AppendLine("[System.Serializable]");
-        classBuilder.AppendLine($"public class {className}");
-        classBuilder.Append(GraphParenthesis(true));
-
-        foreach (var property in jObject.Properties())
+        using (var writer = new IndentedTextWriter(new StringWriter(classBuilder), "    "))
         {
-            string propName = property.Name;
-            JToken propValue = property.Value;
+            writer.WriteLine("using UnityEngine;");
+            writer.WriteLine($"using JsonToCSharp.Generated.{_codegenObject.JsonName};");
+            writer.WriteLine("[CreateAssetMenu(fileName = \"GameData\", menuName = \"ScriptableObjects/GameData\", order = 1)]");
+            writer.WriteLine($"public class {_codegenObject.JsonName}ScriptableObject : ScriptableObject");
+            writer.WriteLine("{");
+            writer.Indent++;
+            writer.WriteLine($"public {_codegenObject.JsonRootClassName} Data;");
+            writer.Indent--;
+            writer.WriteLine("}");
+        }
 
-            string propType;
-            if (propValue.Type == JTokenType.Object)
+        var className = $"{_codegenObject.JsonName}ScriptableObject";
+        var fileName = $"{className}.cs";
+        string filePath = Path.Combine(_codegenObject.OutputPath, fileName);
+        File.WriteAllText(filePath, classBuilder.ToString());
+        _codegenObject.ScriptableObjectClassName = className;
+    }
+    
+    private void GenerateClasses(string className, JObject jObject, IDictionary<string, StringBuilder> classDefinitions)
+    {
+        var classBuilder = new StringBuilder();
+        using (var writer = new IndentedTextWriter(new StringWriter(classBuilder), "    "))
+        {
+            writer.WriteLine("using System;");
+            writer.WriteLine("using System.Collections.Generic;");
+            writer.WriteLine();
+            writer.WriteLine($"namespace JsonToCSharp.Generated.{_codegenObject.JsonName}");
+            writer.WriteLine(CodegenStringHelper.GetBraceParentheses(true));
+            writer.Indent++;
+            writer.WriteLine("[System.Serializable]");
+            writer.WriteLine($"public class {className}");
+            writer.WriteLine(CodegenStringHelper.GetBraceParentheses(true));
+            writer.Indent++;
+
+            foreach (var property in jObject.Properties())
             {
-                propType = CodegenStringHelper.ToPascalCase(propName);
-                GenerateClasses(propType, (JObject)propValue, classDefinitions);
-            }
-            else if (propValue.Type == JTokenType.Array)
-            {
-                var array = (JArray)propValue;
-                if (array.Count > 0 && array[0].Type == JTokenType.Object)
+                string propName = property.Name;
+                JToken propValue = property.Value;
+
+                string propType;
+                if (propValue.Type == JTokenType.Object)
                 {
-                    propType = $"List<{CodegenStringHelper.ToPascalCase(propName)}>";
-                    GenerateClasses(CodegenStringHelper.ToPascalCase(propName), (JObject)array[0], classDefinitions);
+                    propType = CodegenStringHelper.ToPascalCase(propName);
+                    GenerateClasses(propType, (JObject)propValue, classDefinitions);
+                }
+                else if (propValue.Type == JTokenType.Array)
+                {
+                    var array = (JArray)propValue;
+                    if (array.Count > 0 && array[0].Type == JTokenType.Object)
+                    {
+                        propType = $"List<{CodegenStringHelper.ToPascalCase(propName)}>";
+                        GenerateClasses(CodegenStringHelper.ToPascalCase(propName), (JObject)array[0], classDefinitions);
+                    }
+                    else
+                    {
+                        propType = "object[]";
+                    }
                 }
                 else
                 {
-                    propType = "object[]";
+                    propType = GetCSharpType(propValue.Type);
                 }
-            }
-            else
-            {
-                propType = GetCSharpType(propValue.Type);
+
+                writer.WriteLine($"public {propType} {CodegenStringHelper.ToPascalCase(propName)};");
             }
 
-            classBuilder.AppendLine($"    public {propType} {CodegenStringHelper.ToPascalCase(propName)};");
+            writer.Indent--;
+            writer.WriteLine(CodegenStringHelper.GetBraceParentheses(false));
+            writer.Indent--;
+            writer.WriteLine(CodegenStringHelper.GetBraceParentheses(false));
         }
 
-        classBuilder.Append(GraphParenthesis(false));
-        classBuilder.Append(GraphParenthesis(false));
         classDefinitions[className] = classBuilder;
     }
 
-    private static string GraphParenthesis(bool isOpen)
-    {
-        return isOpen ? "{" : "}"; ;
-    }
-
-    private static string GetCSharpType(JTokenType jsonType)
+    private string GetCSharpType(JTokenType jsonType)
     {
         switch (jsonType)
         {

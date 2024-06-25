@@ -6,5 +6,10 @@
 		{
 			return char.ToUpper(str[0]) + str[1..];
 		}
+		
+		public static string GetBraceParentheses(bool isOpen)
+		{
+			return isOpen ? "{" : "}";
+		}
 	}
 }
