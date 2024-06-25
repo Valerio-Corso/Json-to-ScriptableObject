@@ -39,9 +39,9 @@ public class JsonToScriptableObjEditor : EditorWindow
         if (TryPickFilePath(codegenObj)) return;
         
         codegenObj.Json = File.ReadAllText(codegenObj.Path);
-        JsonCodeGenerator.GenerateJsonClasses(codegenObj);
+        CodeGeneratorFromJson.GenerateJsonClasses(codegenObj);
         Debug.Log("C# classes generated successfully!");
-        JsonCodeGenerator.GenerateScriptableRootClass(codegenObj, outputPath);
+        CodeGeneratorFromJson.GenerateScriptableRootClass(codegenObj, outputPath);
         
         AssetDatabase.Refresh();
         _pendingCodegenObject = codegenObj;
@@ -82,7 +82,7 @@ public class JsonToScriptableObjEditor : EditorWindow
             return true;
         }
         
-        codegenObject.JsonName = Path.GetFileNameWithoutExtension(jsonFilePath);
+        codegenObject.JsonName = CodegenStringHelper.ToPascalCase(Path.GetFileNameWithoutExtension(jsonFilePath));
         codegenObject.Path = jsonFilePath;
 
         return false;

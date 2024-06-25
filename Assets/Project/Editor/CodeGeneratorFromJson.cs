@@ -1,34 +1,42 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using Project.Editor;
 using Unity.Plastic.Newtonsoft.Json.Linq;
 
-public static class JsonCodeGenerator
+public static class CodeGeneratorFromJson
 {
+    private static JsonCodegenObject _codegenObject;
+    
     public static void GenerateJsonClasses(JsonCodegenObject codegenObj)
     {
-        var jObject = JObject.Parse(codegenObj.Json);
+        _codegenObject = codegenObj;
+        var jObject = JObject.Parse(_codegenObject.Json);
         var classDefinitions = new Dictionary<string, StringBuilder>();
-        codegenObj.JsonRootClassName = $"{codegenObj.JsonName}Root";
-        GenerateClasses(codegenObj.JsonRootClassName, jObject, classDefinitions);
+        _codegenObject.JsonRootClassName = $"{_codegenObject.JsonName}Root";
+        GenerateClasses(_codegenObject.JsonRootClassName, jObject, classDefinitions);
 
         foreach (var classDef in classDefinitions)
         {
-            var filePath = Path.Combine(codegenObj.OutputPath, $"{classDef.Key}.cs");
+            var filePath = Path.Combine(_codegenObject.OutputPath, $"{_codegenObject.JsonName}{classDef.Key}.cs");
             File.WriteAllText(filePath, classDef.Value.ToString());
         }
+        
+        _codegenObject = null;
     }
     
     public static void GenerateScriptableRootClass(JsonCodegenObject codegenObject, string outputPath)
     {
         var classBuilder = new StringBuilder();
         classBuilder.AppendLine("using UnityEngine;");
+        classBuilder.AppendLine($"using JsonToCSharp.Generated.{codegenObject.JsonName};");
         classBuilder.AppendLine("[CreateAssetMenu(fileName = \"GameData\", menuName = \"ScriptableObjects/GameData\", order = 1)]");
         classBuilder.AppendLine($"public class {codegenObject.JsonName}ScriptableObject : ScriptableObject");
         classBuilder.AppendLine("{");
         classBuilder.AppendLine($"    public {codegenObject.JsonRootClassName} Data;");
         classBuilder.AppendLine("}");
-
+        
         var className = $"{codegenObject.JsonName}ScriptableObject";
         var fileName = $"{className}.cs";
         string filePath = Path.Combine(outputPath, fileName);
@@ -40,10 +48,13 @@ public static class JsonCodeGenerator
     {
         var classBuilder = new StringBuilder();
         classBuilder.AppendLine("using System;");
-        classBuilder.AppendLine("using UnityEngine;");
+        classBuilder.AppendLine("using System.Collections.Generic;");
+        classBuilder.Append(Environment.NewLine);
+        classBuilder.Append($"namespace JsonToCSharp.Generated.{_codegenObject.JsonName}");
+        classBuilder.Append(GraphParenthesis(true));
         classBuilder.AppendLine("[System.Serializable]");
         classBuilder.AppendLine($"public class {className}");
-        classBuilder.AppendLine("{");
+        classBuilder.Append(GraphParenthesis(true));
 
         foreach (var property in jObject.Properties())
         {
@@ -53,7 +64,7 @@ public static class JsonCodeGenerator
             string propType;
             if (propValue.Type == JTokenType.Object)
             {
-                propType = ToPascalCase(propName);
+                propType = CodegenStringHelper.ToPascalCase(propName);
                 GenerateClasses(propType, (JObject)propValue, classDefinitions);
             }
             else if (propValue.Type == JTokenType.Array)
@@ -61,8 +72,8 @@ public static class JsonCodeGenerator
                 var array = (JArray)propValue;
                 if (array.Count > 0 && array[0].Type == JTokenType.Object)
                 {
-                    propType = ToPascalCase(propName) + "[]";
-                    GenerateClasses(ToPascalCase(propName), (JObject)array[0], classDefinitions);
+                    propType = $"List<{CodegenStringHelper.ToPascalCase(propName)}>";
+                    GenerateClasses(CodegenStringHelper.ToPascalCase(propName), (JObject)array[0], classDefinitions);
                 }
                 else
                 {
@@ -74,11 +85,17 @@ public static class JsonCodeGenerator
                 propType = GetCSharpType(propValue.Type);
             }
 
-            classBuilder.AppendLine($"    public {propType} {ToPascalCase(propName)};");
+            classBuilder.AppendLine($"    public {propType} {CodegenStringHelper.ToPascalCase(propName)};");
         }
 
-        classBuilder.AppendLine("}");
+        classBuilder.Append(GraphParenthesis(false));
+        classBuilder.Append(GraphParenthesis(false));
         classDefinitions[className] = classBuilder;
+    }
+
+    private static string GraphParenthesis(bool isOpen)
+    {
+        return isOpen ? "{" : "}"; ;
     }
 
     private static string GetCSharpType(JTokenType jsonType)
@@ -96,10 +113,5 @@ public static class JsonCodeGenerator
             default:
                 return "string";
         }
-    }
-
-    private static string ToPascalCase(string str)
-    {
-        return char.ToUpper(str[0]) + str[1..];
     }
 }
