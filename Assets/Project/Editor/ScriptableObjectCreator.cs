@@ -6,7 +6,7 @@ namespace Project.Editor
 {
     public static class ScriptableObjectCreator
     {
-        public static void CreateAsset(JsonCodegenObject codegenObject)
+        public static void CreateOrUpdateAsset(JsonCodegenObject codegenObject)
         {
             var assetType = GetTypeByName(codegenObject.ScriptableObjectClassName);
             if (assetType == null)
@@ -15,22 +15,32 @@ namespace Project.Editor
                 return;
             }
 
-            codegenObject.Asset = ScriptableObject.CreateInstance(assetType);
             var path = $"{codegenObject.OutputPath}/{codegenObject.ScriptableObjectClassName}.asset";
 
-            // Check if the asset already exists
-            var existingAsset = AssetDatabase.LoadAssetAtPath<ScriptableObject>(path);
-            if (existingAsset != null)
+            ScriptableObject asset;
+            if (AssetExists(path))
             {
-                AssetDatabase.DeleteAsset(path);
+                asset = AssetDatabase.LoadAssetAtPath<ScriptableObject>(path);
+                Debug.Log($"Asset already exists at path: {path}. Updating existing asset.");
+            }
+            else
+            {
+                asset = ScriptableObject.CreateInstance(assetType);
+                AssetDatabase.CreateAsset(asset, path);
+                Debug.Log($"Created new asset at path: {path}.");
             }
 
-            AssetDatabase.CreateAsset(codegenObject.Asset, path);
+            codegenObject.Asset = asset;
+            PopulateAsset(codegenObject);
+
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
+            
+            SelectObject(asset);
+            
         }
-        
-        public static void PopulateAsset(JsonCodegenObject codegenObject)
+
+        private static void PopulateAsset(JsonCodegenObject codegenObject)
         {
             var type = codegenObject.Asset.GetType();
             var fieldInfo = type.GetField("Data");
@@ -39,7 +49,7 @@ namespace Project.Editor
             fieldInfo.SetValue(codegenObject.Asset, data);
         }
 
-        private static void SelectObject(ScriptableObject asset)
+        public static void SelectObject(ScriptableObject asset)
         {
             EditorUtility.FocusProjectWindow();
             Selection.activeObject = asset;
@@ -56,6 +66,11 @@ namespace Project.Editor
                 }
             }
             return null;
+        }
+
+        private static bool AssetExists(string path)
+        {
+            return AssetDatabase.LoadAssetAtPath<ScriptableObject>(path) != null;
         }
     }
 }

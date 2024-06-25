@@ -17,7 +17,7 @@ public class JsonCodegenObject
 public class JsonToScriptableObjEditor : EditorWindow
 {
     private string outputPath = "Assets/Content/Sample";
-    
+
     [MenuItem("Tools/Scriptable Object Maker")]
     public static void ShowWindow()
     {
@@ -44,35 +44,16 @@ public class JsonToScriptableObjEditor : EditorWindow
         codeGenerator.GenerateFolderStructure();
         codeGenerator.GenerateJsonClasses();
         codeGenerator.GenerateScriptableRootClass();
-        
         AssetDatabase.Refresh();
-        _pendingCodegenObject = codegenObj;
+        SaveDataForScriptableObjectCreation(codegenObj);
     }
 
-    private static JsonCodegenObject _pendingCodegenObject;
-    private void Update()
+    private static void SaveDataForScriptableObjectCreation(JsonCodegenObject codegenObj)
     {
-        CheckForPendingFileCreation();
-    }
-
-    private void CheckForPendingFileCreation()
-    {
-        if (EditorApplication.isCompiling || EditorApplication.isUpdating || _pendingCodegenObject == null) return;
-        
-        Debug.Log("Pending scriptable object creation true...");
-        try
-        {
-            ScriptableObjectCreator.CreateAsset(_pendingCodegenObject);
-            ScriptableObjectCreator.PopulateAsset(_pendingCodegenObject);
-        }
-        catch (System.Exception e)
-        {
-            Debug.LogError($"Failed to create ScriptableObject: {e.Message}");
-        }
-        finally
-        {
-            _pendingCodegenObject = null;
-        }
+        EditorPrefs.SetBool("PendingScriptableCreation", true);
+        EditorPrefs.SetString("PendingScriptablePath", codegenObj.OutputPath);
+        EditorPrefs.SetString("PendingJsonFilePath", codegenObj.Path);
+        EditorPrefs.SetString("PendingScriptableObjectClassName", codegenObj.ScriptableObjectClassName);
     }
 
     private static bool TryPickFilePath(JsonCodegenObject codegenObject)
