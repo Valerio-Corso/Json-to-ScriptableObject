@@ -1,6 +1,6 @@
 ﻿namespace Project.Editor
 {
-	public static class CodegenStringHelper
+	public static class CodegenFormatterHelper
 	{
 		public static string ToPascalCase(string str)
 		{
